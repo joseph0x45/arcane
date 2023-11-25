@@ -28,3 +28,6 @@ migrate:
 
 test:
 	@go test -v ./...
+
+build-image:
+	docker build -t arcane:latest .
