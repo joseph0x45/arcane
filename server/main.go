@@ -16,14 +16,16 @@ import (
 func main() {
 	godotenv.Load()
 	pool := store.GetPostgresPool()
+  redisClient := store.GetRedisClient()
 
 	logger := logrus.New()
 	logger.SetReportCaller(true)
 
 	usersStore := store.NewUsersStore(pool)
 	teamsStore := store.NewTeamsStore(pool)
+  sessionsStore := store.NewSessionsStore(redisClient)
 
-	authHandler := handlers.NewAuthHandler(usersStore, teamsStore, logger)
+	authHandler := handlers.NewAuthHandler(usersStore, teamsStore, sessionsStore, logger)
 
 	r := chi.NewRouter()
 

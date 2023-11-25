@@ -15,16 +15,18 @@ import (
 )
 
 type AuthHandler struct {
-	Users  *store.Users
-	Teams  *store.Teams
-	Logger *logrus.Logger
+	Users    *store.Users
+	Teams    *store.Teams
+	Sessions *store.Sessions
+	Logger   *logrus.Logger
 }
 
-func NewAuthHandler(u *store.Users, t *store.Teams, l *logrus.Logger) *AuthHandler {
+func NewAuthHandler(u *store.Users, t *store.Teams, s *store.Sessions, l *logrus.Logger) *AuthHandler {
 	return &AuthHandler{
-		Users:  u,
-		Teams:  t,
-		Logger: l,
+		Users:    u,
+		Teams:    t,
+		Sessions: s,
+		Logger:   l,
 	}
 }
 
@@ -105,16 +107,39 @@ func (h *AuthHandler) GithubAuthCallback(w http.ResponseWriter, r *http.Request)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			//Generate some sort of session id
-			http.Redirect(w, r, os.Getenv("ARCANE_WEB_URL"), http.StatusTemporaryRedirect)
+			sessionId, err := h.Sessions.Create(userId)
+			if err != nil {
+				h.Logger.Error(err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			redirectURL := fmt.Sprintf("%s/login?sessionId=%s", os.Getenv("ARCANE_WEB_URL"), sessionId)
+			http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 			return
 		}
 		h.Logger.Error(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	//Generate some sort of session id
-	http.Redirect(w, r, os.Getenv("ARCANE_WEB_URL"), http.StatusTemporaryRedirect)
+	err = h.Users.UpdateData(
+		dbUser.Id,
+		email,
+		avatar,
+		username,
+	)
+	if err != nil {
+		h.Logger.Error(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	sessionId, err := h.Sessions.Create(dbUser.Id)
+	if err != nil {
+		h.Logger.Error(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	redirectURL := fmt.Sprintf("%s/login?sessionId=%s", os.Getenv("ARCANE_WEB_URL"), sessionId)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 	return
 }
 
