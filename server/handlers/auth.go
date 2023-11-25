@@ -4,15 +4,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"net/http"
 	"os"
 	"server/models"
 	"server/pkg"
 	"server/store"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 )
 
 type AuthHandler struct {
@@ -31,7 +30,7 @@ func NewAuthHandler(u *store.Users, t *store.Teams, l *logrus.Logger) *AuthHandl
 
 func (h *AuthHandler) RequestGithubAuth(w http.ResponseWriter, r *http.Request) {
 	redirectURL := fmt.Sprintf(
-		"https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s",
+		"https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=user:email",
 		os.Getenv("GITHUB_CLIENT_ID"),
 		os.Getenv("GITHUB_AUTH_REDIRECT_URI"),
 	)
@@ -72,8 +71,11 @@ func (h *AuthHandler) GithubAuthCallback(w http.ResponseWriter, r *http.Request)
 	strId := fmt.Sprintf("%.f", id)
 	email, ok := data["email"].(string)
 	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		email, err = pkg.GetGithubUserEmail(accessToken, h.Logger)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 	username, ok := data["name"].(string)
 	if !ok {
@@ -89,7 +91,6 @@ func (h *AuthHandler) GithubAuthCallback(w http.ResponseWriter, r *http.Request)
 	_ = dbUser
 	if err != nil {
 		if err == sql.ErrNoRows {
-			//User is signing in for the first time
 			userId := uuid.NewString()
 			newUser := &models.User{
 				Id:        userId,
