@@ -65,7 +65,6 @@ func (h *AuthHandler) GithubAuthCallback(w http.ResponseWriter, r *http.Request)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-  fmt.Printf("%#v\n", data)
 	id, ok := data["id"].(float64)
 	if !ok {
     fmt.Println("Id not detected")
@@ -81,15 +80,13 @@ func (h *AuthHandler) GithubAuthCallback(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-	username, ok := data["name"].(string)
+	username, ok := data["login"].(string)
 	if !ok {
-    fmt.Println("username not detected")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	avatar, ok := data["avatar_url"].(string)
 	if !ok {
-    fmt.Println("avatar not detected")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
