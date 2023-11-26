@@ -32,7 +32,7 @@ func NewAuthHandler(u *store.Users, t *store.Teams, s *store.Sessions, l *logrus
 
 func (h *AuthHandler) RequestGithubAuth(w http.ResponseWriter, r *http.Request) {
 	redirectURL := fmt.Sprintf(
-		"https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=user:email",
+    "https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=user:email,read:user",
 		os.Getenv("GITHUB_CLIENT_ID"),
 		os.Getenv("GITHUB_AUTH_REDIRECT_URI"),
 	)
