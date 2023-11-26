@@ -65,6 +65,7 @@ func (h *AuthHandler) GithubAuthCallback(w http.ResponseWriter, r *http.Request)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+  fmt.Printf("%#v\n", data)
 	id, ok := data["id"].(float64)
 	if !ok {
     fmt.Println("Id not detected")
