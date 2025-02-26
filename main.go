@@ -3,28 +3,43 @@ package main
 import (
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"time"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/joseph0x45/arcane/handlers"
 )
 
+const localFrontendURL = "http://localhost:5173/"
+
+func serveFrontend(env string) http.Handler {
+	if env == "dev" {
+		target, _ := url.Parse(localFrontendURL)
+		proxy := httputil.NewSingleHostReverseProxy(target)
+		log.Println("Proxying frontend to Vite on port 8080")
+		return proxy
+	}
+	//serve from embedded files
+	log.Println("Serving frontend from embedded files")
+	fs := http.FileServer(http.FS(embeddedFiles))
+	return http.StripPrefix("/", fs)
+}
+
+var env = "prod"
+
 func main() {
+	mux := http.NewServeMux()
 
 	//handlers
-	uiHandler := handlers.NewUIHandler()
+	if env == "prod" {
+		log.Println("Running in prod mode")
+		return
+	}
+	log.Println("Running in dev mode")
 
-	r := chi.NewRouter()
-
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("we good"))
-	})
-
-	uiHandler.RegisterRoutes(r)
+	mux.Handle("/", serveFrontend(env))
 
 	server := http.Server{
 		Addr:         ":8080",
-		Handler:      r,
+		Handler:      mux,
 		ReadTimeout:  time.Minute,
 		WriteTimeout: time.Minute,
 		IdleTimeout:  time.Minute,
@@ -34,5 +49,4 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		panic(err)
 	}
-
 }

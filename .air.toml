@@ -5,9 +5,9 @@ tmp_dir = "tmp"
 [build]
   args_bin = []
   bin = "./tmp/main"
-  cmd = "make tailwind-compile && go build -o ./tmp/main ."
+  cmd = "go build -ldflags '-X main.env=dev' -o ./tmp/main ."
   delay = 1000
-  exclude_dir = ["assets", "tmp", "vendor", "testdata", "node_modules"]
+  exclude_dir = ["assets", "tmp", "vendor", "testdata", "frontend"]
   exclude_file = []
   exclude_regex = ["_test.go"]
   exclude_unchanged = false
