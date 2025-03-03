@@ -2,7 +2,6 @@
 import { render } from 'solid-js/web'
 import './index.css'
 import App from './App.tsx'
-import { Router, Route } from "@solidjs/router"
 
 const wrapper = document.getElementById("root")
 
@@ -11,6 +10,4 @@ if (!wrapper) {
 }
 
 render(() =>
-  <Router>
-    <Route path="/" component={App} />
-  </Router>, wrapper)
+  <App />, wrapper)

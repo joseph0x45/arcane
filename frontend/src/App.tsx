@@ -1,8 +1,16 @@
-export default function App() {
+import { Router, Route } from "@solidjs/router"
+import Welcome from "./pages/Welcome"
+import { Toaster } from "solid-toast"
+import Home from "./pages/Home"
 
+export default function App() {
   return (
     <>
-      <h1 class="font-bold text-4xl">Hello</h1>
+      <Toaster position="bottom-right" gutter={8} />
+      <Router>
+        <Route path="/" component={Welcome} />
+        <Route path="/home" component={Home} />
+      </Router>
     </>
   )
 }
