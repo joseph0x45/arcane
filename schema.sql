@@ -3,7 +3,7 @@ create table users (
   github_id text not null unique,
   username text not null,
   avatar_url text not null,
-  joined_at timestamp not null
+  joined_at text not null
 );
 
 create table sessions (

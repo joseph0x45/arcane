@@ -61,3 +61,18 @@ func (r *UserRepo) GetByGithubID(ghID string) (*models.User, error) {
 	}
 	return &user, nil
 }
+
+func (r *UserRepo) GetByID(id string) (*models.User, error) {
+	const query = `
+    select * from users where id=$1
+  `
+	user := models.User{}
+	err := r.db.Get(&user, query, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("Error while getting user by id: %w", err)
+	}
+	return &user, nil
+}

@@ -88,7 +88,7 @@ func (h *AuthHandler) handleAuthCallback(w http.ResponseWriter, r *http.Request)
 			GithubID:  idStr,
 			Username:  data.Login,
 			AvatarURL: data.AvatarURL,
-			JoinedAt:  time.Now().UTC(),
+			JoinedAt:  time.Now().UTC().String(),
 		}
 		err = h.userRepo.Insert(newUser)
 		userID = newUser.ID
@@ -124,7 +124,49 @@ func (h *AuthHandler) handleAuthCallback(w http.ResponseWriter, r *http.Request)
 	return
 }
 
+func (h *AuthHandler) GetUserData(w http.ResponseWriter, r *http.Request) {
+	sessionCookie, err := r.Cookie("session")
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	session, err := h.sessionRepo.GetByID(sessionCookie.Value)
+	if err != nil {
+		log.Println(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if session == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	user, err := h.userRepo.GetByID(session.UserID)
+	if err != nil {
+		log.Println(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if user == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	data := map[string]any{
+		"data": map[string]any{
+			"user": user,
+		},
+	}
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		log.Println("Error while marshalling data: ", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(bytes)
+}
+
 func (h *AuthHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/auth/login", h.handleAuthRequest)
 	mux.HandleFunc("/auth/callback", h.handleAuthCallback)
+	mux.HandleFunc("/auth/user", h.GetUserData)
 }
