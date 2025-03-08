@@ -1,8 +1,10 @@
 package validation
 
-import "regexp"
+import (
+	"net/mail"
+)
 
 func IsEmail(str *string) bool {
-	re := regexp.MustCompile(`/^((?!\.)[\w-_.]*[^.])(@\w+)(\.\w+(\.\w+)?[^.\W])$/gim;`)
-	return re.MatchString(*str)
+	_, err := mail.ParseAddress(*str)
+	return err == nil
 }

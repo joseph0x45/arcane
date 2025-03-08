@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -22,6 +21,7 @@ func getDBPool() *sqlx.DB {
 		logger.Error(err)
 		return nil
 	}
+	logger.Info("Connected to database")
 	return db
 }
 
@@ -35,7 +35,8 @@ func newLogger() *slog.Logger {
 }
 
 func main() {
-  godotenv.Load()
+	godotenv.Load()
+	port := os.Getenv("PORT")
 	db := getDBPool()
 	if db == nil {
 		return
@@ -56,13 +57,13 @@ func main() {
 	authHandler.RegisterRoutes(mux)
 
 	server := http.Server{
-		Addr:         ":8080",
+		Addr:         ":" + port,
 		Handler:      mux,
 		ReadTimeout:  time.Minute,
 		WriteTimeout: time.Minute,
 		IdleTimeout:  time.Minute,
 	}
-	log.Println("Starting server on port 8080")
+	logger.Info("Starting server on port 8080")
 	if err := server.ListenAndServe(); err != nil {
 		panic(err)
 	}
