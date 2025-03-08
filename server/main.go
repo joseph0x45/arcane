@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/joho/godotenv"
 	"github.com/joseph0x45/arcane/server/handlers"
 	"github.com/joseph0x45/arcane/server/logger"
 	"github.com/joseph0x45/arcane/server/middleware"
@@ -34,6 +35,7 @@ func newLogger() *slog.Logger {
 }
 
 func main() {
+  godotenv.Load()
 	db := getDBPool()
 	if db == nil {
 		return

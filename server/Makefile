@@ -29,7 +29,7 @@ reset-db:
 	$(MAKE) migrate
 
 into-db:
-	@podman exec -it $(DB_CONTAINER_NAME) bash
+	@podman exec -it $(DB_CONTAINER_NAME) psql -U postgres -d $(DB_NAME)
 
 migrate:
 	@podman cp ./schema.sql $(DB_CONTAINER_NAME):/tmp/schema.sql
