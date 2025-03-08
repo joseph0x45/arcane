@@ -2,7 +2,13 @@ package main
 
 import tea "github.com/charmbracelet/bubbletea"
 
+const (
+	authScreen = iota
+	basicLoggedInScreen
+)
+
 type Model struct {
+	screen uint
 }
 
 func NewModel() *Model {
@@ -25,5 +31,5 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 }
 
 func (m *Model) View() string {
-	return "Welcome to Arcane"
+	return arcaneASCIIArt + "\n\nhttps://github.com/joseph0x45/arcane"
 }
