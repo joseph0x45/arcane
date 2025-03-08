@@ -2,171 +2,151 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
-	"os"
-	"strconv"
-	"time"
 
-	"github.com/joseph0x45/arcane/github"
-	"github.com/joseph0x45/arcane/models"
-	"github.com/joseph0x45/arcane/repository"
+	"github.com/joseph0x45/arcane/server/httputils"
+	"github.com/joseph0x45/arcane/server/logger"
+	"github.com/joseph0x45/arcane/server/middleware"
+	"github.com/joseph0x45/arcane/server/models"
+	"github.com/joseph0x45/arcane/server/repository"
+	"github.com/joseph0x45/arcane/server/sharedconsts"
+	"github.com/joseph0x45/arcane/server/utils"
+	"github.com/joseph0x45/arcane/server/validation"
 	"github.com/oklog/ulid/v2"
 )
 
 type AuthHandler struct {
-	userRepo    *repository.UserRepo
-	sessionRepo *repository.SessionRepo
+	userRepo       *repository.UserRepo
+	sessionRepo    *repository.SessionRepo
+	authMiddleware *middleware.AuthMiddleware
 }
 
 func NewAuthHandler(
 	userRepo *repository.UserRepo,
 	sessionRepo *repository.SessionRepo,
+	authMiddleware *middleware.AuthMiddleware,
 ) *AuthHandler {
 	return &AuthHandler{
-		userRepo:    userRepo,
-		sessionRepo: sessionRepo,
+		userRepo:       userRepo,
+		sessionRepo:    sessionRepo,
+		authMiddleware: authMiddleware,
 	}
 }
 
-func (h *AuthHandler) handleAuthRequest(w http.ResponseWriter, _ *http.Request) {
-	oauthURL := fmt.Sprintf(
-		"https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=user:email",
-		os.Getenv("GH_CLIENT_ID"),
-		os.Getenv("GH_REDIRECT_URI"))
-	data, err := json.Marshal(
-		map[string]string{
-			"url": oauthURL,
-		},
-	)
+func (h *AuthHandler) handleRegistration(w http.ResponseWriter, r *http.Request) {
+	payload := struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}{}
+	err := json.NewDecoder(r.Body).Decode(&payload)
 	if err != nil {
-		log.Println("Error while creating oauth url:", err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
+		logger.Error(err)
+		httputils.WriteError(w, "Failed to decode body", http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	if payload.Email == "" || !validation.IsEmail(&payload.Email) {
+		httputils.WriteError(w, "Invalid Email", http.StatusBadRequest)
+		return
+	}
+	if len(payload.Password) > sharedconsts.BCRYPT_PWD_MAX_LENGH {
+		httputils.WriteError(w, "Password too long. Should be less that 72 characters", http.StatusBadRequest)
+		return
+	}
+	if payload.Password == "" {
+		httputils.WriteError(w, "Invalid Password", http.StatusBadRequest)
+		return
+	}
+	user, err := h.userRepo.GetByEmail(payload.Email)
+	if err != nil {
+		logger.Error(err)
+		httputils.WriteError(w, sharedconsts.GENERIC_HTTP_500_ERROR, http.StatusConflict)
+		return
+	}
+	if user != nil {
+		httputils.WriteError(w, "Email is already in use", http.StatusConflict)
+		return
+	}
+	hash, err := utils.HashPassword(payload.Password)
+	if err != nil {
+		logger.Error(err)
+		httputils.WriteError(w, sharedconsts.GENERIC_HTTP_500_ERROR, http.StatusInternalServerError)
+		return
+	}
+	user = &models.User{
+		ID:       ulid.Make().String(),
+		Email:    payload.Email,
+		Password: string(hash),
+	}
+	err = h.userRepo.Insert(user)
+	if err != nil {
+		logger.Error(err)
+		httputils.WriteError(w, sharedconsts.GENERIC_HTTP_500_ERROR, http.StatusInternalServerError)
+		return
+	}
+	httputils.WriteData(w, nil, http.StatusCreated)
 }
 
-func (h *AuthHandler) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
-	code := r.URL.Query().Get("code")
-	error := r.URL.Query().Get("error")
-	if error != "" {
-		log.Println("Error while loging in:", error)
-		http.Redirect(w, r, "/?state=error", http.StatusSeeOther)
-		return
-	}
-	if code == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		http.Redirect(w, r, "/?state=error", http.StatusSeeOther)
-		return
-	}
-	accessToken, err := github.ExchangeCodeWithToken(code)
+func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
+	payload := struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}{}
+	err := json.NewDecoder(r.Body).Decode(&payload)
 	if err != nil {
-		log.Println(err)
-		http.Redirect(w, r, "/?state=error", http.StatusSeeOther)
+		logger.Error(err)
+		httputils.WriteError(w, "Failed to decode body", http.StatusInternalServerError)
 		return
 	}
-	data, err := github.GetGithubUserData(accessToken)
-	if err != nil {
-		log.Println(err)
-		http.Redirect(w, r, "/?state=error", http.StatusSeeOther)
+	if payload.Email == "" || !validation.IsEmail(&payload.Email) {
+		httputils.WriteError(w, "Invalid Email", http.StatusBadRequest)
 		return
 	}
-	idStr := strconv.Itoa(data.ID)
-	existingUser, err := h.userRepo.GetByGithubID(idStr)
-	if err != nil {
-		log.Println(err.Error())
-		http.Redirect(w, r, "/?state=error", http.StatusSeeOther)
+	if len(payload.Password) > sharedconsts.BCRYPT_PWD_MAX_LENGH {
+		httputils.WriteError(w, "Password too long. Should be less that 72 characters", http.StatusBadRequest)
 		return
 	}
-	userID := ""
-	if existingUser == nil {
-		newUser := &models.User{
-			ID:        ulid.Make().String(),
-			GithubID:  idStr,
-			Username:  data.Login,
-			AvatarURL: data.AvatarURL,
-			JoinedAt:  time.Now().UTC().String(),
-		}
-		err = h.userRepo.Insert(newUser)
-		userID = newUser.ID
-	} else {
-		userID = existingUser.ID
-		err = h.userRepo.UpdateUserData(data.Login, data.AvatarURL, existingUser.ID)
+	if payload.Password == "" {
+		httputils.WriteError(w, "Invalid Password", http.StatusBadRequest)
+		return
 	}
+	user, err := h.userRepo.GetByEmail(payload.Email)
 	if err != nil {
-		log.Println(err.Error())
-		http.Redirect(w, r, "/?state=error", http.StatusSeeOther)
+		logger.Error(err)
+		httputils.WriteError(w, sharedconsts.GENERIC_HTTP_500_ERROR, http.StatusInternalServerError)
+		return
+	}
+	if user == nil {
+		httputils.WriteError(w, "No user found with that Email", http.StatusBadRequest)
+		return
+	}
+	if !utils.HashMatchesPassword(user.Password, payload.Password) {
+		httputils.WriteError(w, "Wrong password", http.StatusBadRequest)
 		return
 	}
 	session := &models.Session{
 		ID:      ulid.Make().String(),
-		UserID:  userID,
+		UserID:  user.ID,
 		IsValid: true,
 	}
 	err = h.sessionRepo.Insert(session)
 	if err != nil {
-		log.Println(err.Error())
-		http.Redirect(w, r, "/?state=error", http.StatusSeeOther)
+		logger.Error(err)
+		httputils.WriteError(w, sharedconsts.GENERIC_HTTP_500_ERROR, http.StatusInternalServerError)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session",
-		Value:    session.ID,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-	http.Redirect(w, r, "/home", http.StatusSeeOther)
-	return
+	httputils.WriteData(w, map[string]any{
+		"data": map[string]string{
+			"session": session.ID,
+		},
+	}, http.StatusOK)
 }
 
-func (h *AuthHandler) GetUserData(w http.ResponseWriter, r *http.Request) {
-	sessionCookie, err := r.Cookie("session")
-	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	session, err := h.sessionRepo.GetByID(sessionCookie.Value)
-	if err != nil {
-		log.Println(err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if session == nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	user, err := h.userRepo.GetByID(session.UserID)
-	if err != nil {
-		log.Println(err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if user == nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	data := map[string]any{
-		"data": map[string]any{
-			"user": user,
-		},
-	}
-	bytes, err := json.Marshal(data)
-	if err != nil {
-		log.Println("Error while marshalling data: ", err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	w.Write(bytes)
+func (h *AuthHandler) getCurrentUserInfo() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 }
 
 func (h *AuthHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/auth/login", h.handleAuthRequest)
-	mux.HandleFunc("/auth/callback", h.handleAuthCallback)
-	mux.HandleFunc("/auth/user", h.GetUserData)
+	mux.HandleFunc("POST /auth/register", h.handleRegistration)
+	mux.HandleFunc("POST /auth/login", h.handleLogin)
+	mux.Handle("GET /user", h.authMiddleware.Authenticate(h.getCurrentUserInfo()))
 }

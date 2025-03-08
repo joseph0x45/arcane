@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/joseph0x45/arcane/models"
+	"github.com/joseph0x45/arcane/server/models"
 )
 
 type SessionRepo struct {
@@ -14,14 +14,12 @@ type SessionRepo struct {
 }
 
 func NewSessionRepo(db *sqlx.DB) *SessionRepo {
-	return &SessionRepo{
-		db: db,
-	}
+	return &SessionRepo{db: db}
 }
 
 func (r *SessionRepo) Insert(session *models.Session) error {
 	const query = `
-    insert into sessions(
+    insert into sessions (
       id, user_id, is_valid
     )
     values(
@@ -36,8 +34,10 @@ func (r *SessionRepo) Insert(session *models.Session) error {
 }
 
 func (r *SessionRepo) GetByID(id string) (*models.Session, error) {
+	const query = `
+    select * from sessions where id=$1 and is_valid=true
+  `
 	session := &models.Session{}
-	const query = "select * from sessions where id=$1 and is_valid=true"
 	err := r.db.Get(session, query, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

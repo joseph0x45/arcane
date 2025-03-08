@@ -1,6 +1,7 @@
 # Endpoints
 - POST /auth/register
 To register as a new user
+
 - POST /auth/login
 To login
 

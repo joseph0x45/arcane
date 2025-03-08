@@ -1,9 +1,7 @@
 create table users (
   id text not null primary key,
-  github_id text not null unique,
-  username text not null,
-  avatar_url text not null,
-  joined_at text not null
+  email text not null unique,
+  password text not null
 );
 
 create table sessions (
