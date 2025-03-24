@@ -38,4 +38,3 @@ migrate:
 seed:
 	@podman cp ./seed.sql $(DB_CONTAINER_NAME):/tmp/seed.sql
 	@podman exec -it $(DB_CONTAINER_NAME) psql -U postgres -d $(DB_NAME) -f /tmp/seed.sql
-
